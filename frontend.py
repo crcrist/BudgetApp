@@ -37,8 +37,18 @@ except sqlite3.Error as e:
 def load_data():
     query = "SELECT * FROM transactions"
     df = pd.read_sql(query, conn)
-    df['posting_date'] = pd.to_datetime(df['posting_date'])
+
+    # print("Unique date formats in posting_date:")
+    # print(df['posting_date'].unique())
+
+    # Convert dates using mixed format parsing
+    df['posting_date'] = pd.to_datetime(df['posting_date'], format='mixed')
     df['month_year'] = df['posting_date'].dt.to_period('M')
+
+    # ensure all amounts are numeric
+    df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+    df['balance'] = pd.to_numeric(df['balance'], errors='coerce')
+
     return df
 
 df = load_data()
@@ -68,6 +78,16 @@ filtered_df = df[mask]
 
 if selected_category_filter != 'All':
     filtered_df = filtered_df[filtered_df['transaction_category'] == selected_category_filter]
+
+all_accounts = ['All'] + list(df['account_owner'].unique())
+selected_account = st.sidebar.selectbox(
+    "Filter by Account",
+    options=all_accounts
+)
+
+# Update your filtering logic
+if selected_account != 'All':
+    filtered_df = filtered_df[filtered_df['account_owner'] == selected_account]
 
 # Summary metrics
 st.header("Summary Metrics")

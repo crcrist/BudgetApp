@@ -72,8 +72,16 @@ def delete_db():
     conn.commit()
     print("All transactions have been deleted from the database.")
 
+def update_db():
+    cursor.execute('''
+ALTER TABLE transactions 
+ADD COLUMN account_owner TEXT DEFAULT 'Connor'
+''')
+    conn.commit()
+    print("Database has been updated")    
+
 def select_query():
-    cursor.execute("SELECT DISTINCT count(distinct(posting_date))  FROM transactions WHERE amount < 0 ")
+    cursor.execute("SELECT * FROM transactions WHERE account_owner = 'Partner' ")
     rows = cursor.fetchall()
 
     print ("All combinations of description and category:")
@@ -87,6 +95,7 @@ def select_query():
 # count_transactions()  # Display total count of transactions
 # check_for_duplicates()
 # delete_db()
+# update_db()
 select_query()
 
 # Close the connection when done
