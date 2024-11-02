@@ -1,0 +1,26 @@
+# Ignore SQLite database
+*.db
+
+# Ignore configuration files with sensitive information
+config.ini
+
+# Ignore CSVs or other data files
+*.csv
+*.json
+transaction_categories.json
+
+# Environment variables
+.env
+*.env
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Python environment
+__pycache__/
+*.py[cod]
+*$py.class
+.env/
+venv/
