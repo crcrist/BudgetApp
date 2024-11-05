@@ -19,27 +19,22 @@ logging.basicConfig(
 # Load env
 load_dotenv()
 
-# Connect to DB
-db_path = os.getenv("DB_PATH")
+# Connect to DB with expanded path
+db_path = os.path.expanduser(os.getenv("DB_PATH"))
 
 try:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    logging.info("Connected to the database.")
+    logging.info(f"Connected to the database at {db_path}")
 except sqlite3.Error as e:
     logging.error(f"Database connection failed: {e}")
     exit()
-
-
 
 # Enhanced data loading with basic preprocessing
 @st.cache_data
 def load_data():
     query = "SELECT * FROM transactions"
     df = pd.read_sql(query, conn)
-
-    # print("Unique date formats in posting_date:")
-    # print(df['posting_date'].unique())
 
     # Convert dates using mixed format parsing
     df['posting_date'] = pd.to_datetime(df['posting_date'], format='mixed')
@@ -53,12 +48,30 @@ def load_data():
 
 df = load_data()
 
+# Helper function to get expenses based on account owner
+def get_expenses(df, account_owner=None):
+    if account_owner == 'Partner':
+        # For Partner, consider all transactions as expenses
+        return df[df['transaction_type'].str.lower() == 'debit']
+    else:
+        # For others (Connor), use negative amounts
+        return df[df['amount'] < 0]
+
+# Helper function to get income based on account owner
+def get_income(df, account_owner=None):
+    if account_owner == 'Partner':
+        # For Partner, consider all credit transactions as income
+        return df[df['transaction_type'].str.lower() == 'credit']
+    else:
+        # For others (Connor), use positive amounts
+        return df[df['amount'] > 0]
+
 # Sidebar for global filters
 st.sidebar.header("Filters")
 # Date range filter
 date_range = st.sidebar.date_input(
     "Select Date Range",
-    value=(df['posting_date'].min(), df['posting_date'].max()),
+    value=(df['posting_date'].min().date(), df['posting_date'].max().date()),
     max_value=datetime.now()
 )
 
@@ -94,20 +107,25 @@ st.header("Summary Metrics")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    total_spending = filtered_df[filtered_df['amount'] < 0]['amount'].sum()
+    expenses_df = get_expenses(filtered_df, selected_account)
+    total_spending = expenses_df['amount'].sum()
     st.metric("Total Spending", f"${abs(total_spending):,.2f}")
     
 with col2:
-    total_income = filtered_df[filtered_df['amount'] > 0]['amount'].sum()
+    income_df = get_income(filtered_df, selected_account)
+    total_income = income_df['amount'].sum()
     st.metric("Total Income", f"${total_income:,.2f}")
     
 with col3:
-    net_flow = total_income + total_spending
+    if selected_account == 'Partner':
+        net_flow = total_income - total_spending
+    else:
+        net_flow = total_income + total_spending  # spending is already negative
     st.metric("Net Cash Flow", f"${net_flow:,.2f}")
 
 with col4:
     # Calculate avg_daily_spending based only on days with expenses
-    spending_days = filtered_df[filtered_df['amount'] < 0]['posting_date'].dt.date.nunique()
+    spending_days = expenses_df['posting_date'].dt.date.nunique()
     if spending_days > 0:
         avg_daily_spending = abs(total_spending) / spending_days
     else:
@@ -116,10 +134,10 @@ with col4:
 
 # Monthly Spending Trends
 st.header("Monthly Spending Analysis")
-# Filter only expense transactions (negative amounts)
-monthly_expenses = filtered_df[filtered_df['amount'] < 0]
+# Filter only expense transactions based on account
+monthly_expenses = get_expenses(filtered_df, selected_account)
 
-# Group by month and calculate total spending (expenses only) and transaction count
+# Group by month and calculate total spending and transaction count
 monthly_spending = monthly_expenses.groupby(monthly_expenses['posting_date'].dt.to_period('M')).agg(
     total_amount=('amount', 'sum'),
     transaction_count=('amount', 'count')
@@ -150,8 +168,9 @@ st.header("Category Analysis")
 col1, col2 = st.columns(2)
 
 with col1:
-    # Get spending by category
-    category_spending = filtered_df[filtered_df['amount'] < 0].groupby('transaction_category')['amount'].sum().abs()
+    # Get spending by category using the helper function
+    expenses_df = get_expenses(filtered_df, selected_account)
+    category_spending = expenses_df.groupby('transaction_category')['amount'].sum().abs()
     
     # Get top 5 categories
     top_5_categories = category_spending.nlargest(5)
@@ -182,12 +201,19 @@ with col2:
 # Transaction Table
 st.header("Transaction Details")
 
-# Amount filter
+# Amount filter - adjust range based on account
+if selected_account == 'Partner':
+    amount_min = float(df['amount'].min())
+    amount_max = float(df['amount'].max())
+else:
+    amount_min = float(df[df['amount'] < 0]['amount'].min())
+    amount_max = float(df[df['amount'] > 0]['amount'].max())
+
 amount_range = st.slider(
     "Filter by Amount Range",
-    float(df['amount'].min()),
-    float(df['amount'].max()),
-    (float(df['amount'].min()), float(df['amount'].max()))
+    amount_min,
+    amount_max,
+    (amount_min, amount_max)
 )
 
 # Apply amount filter to table data
@@ -206,9 +232,10 @@ st.dataframe(
 st.header("Budget Analysis")
 monthly_budget = st.number_input("Set Monthly Budget Target ($)", min_value=0.0, value=5000.0)
 
-# Calculate monthly spending vs budget
-monthly_vs_budget = filtered_df[filtered_df['amount'] < 0].groupby(
-    filtered_df['posting_date'].dt.to_period('M')
+# Calculate monthly spending vs budget using the helper function
+expenses_df = get_expenses(filtered_df, selected_account)
+monthly_vs_budget = expenses_df.groupby(
+    expenses_df['posting_date'].dt.to_period('M')
 )['amount'].sum().abs()
 
 fig_budget = go.Figure()

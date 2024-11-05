@@ -13,30 +13,48 @@ logging.basicConfig(
     ]
 )
 
-# Load environment
+# Load environment variables
 load_dotenv()
 
-# Database connection
-db_path = os.getenv("DB_PATH")
+# Expand paths from environment variables
+db_path = os.path.expanduser(os.getenv("DB_PATH"))
+my_csv_folder = os.path.expanduser(os.getenv("MY_PATH"))
+partner_csv_folder = os.path.expanduser(os.getenv("BBY_PATH"))
 
+# Database connection
 try:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    logging.info("Connected to the database.")
+    logging.info(f"Connected to the database at {db_path}")
 except sqlite3.Error as e:
     logging.error(f"Database connection failed: {e}")
     exit()
 
-# Add account_owner column if it doesn't exist
+# Create transactions table if it doesn't exist
 try:
     cursor.execute('''
-    ALTER TABLE transactions
-    ADD COLUMN account_owner TEXT DEFAULT 'Connor'
+    CREATE TABLE IF NOT EXISTS transactions (
+        transaction_id TEXT PRIMARY KEY,
+        posting_date TEXT,
+        effective_date TEXT,
+        transaction_type TEXT,
+        amount REAL,
+        check_number TEXT,
+        reference_number TEXT,
+        description TEXT,
+        transaction_category TEXT,
+        type TEXT,
+        balance REAL,
+        memo TEXT,
+        extended_description TEXT,
+        account_owner TEXT
+    )
     ''')
     conn.commit()
-except sqlite3.OperationalError:
-    # Column already exists
-    pass
+    logging.info("Transactions table verified/created.")
+except sqlite3.Error as e:
+    logging.error(f"Error creating transactions table: {e}")
+    exit()
 
 # Load category mappings
 category_file = 'transaction_categories.json'
@@ -50,10 +68,6 @@ except FileNotFoundError:
 
 # Initialize processor
 processor = TransactionProcessor(conn, category_mappings)
-
-# Get folder paths
-my_csv_folder = os.getenv("MY_CSV_FOLDER")
-partner_csv_folder = os.getenv("PARTNER_CSV_FOLDER")
 
 # Add debug logging for paths
 logging.info(f"My CSV folder path: {my_csv_folder}")

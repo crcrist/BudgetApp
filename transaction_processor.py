@@ -41,6 +41,13 @@ class TransactionProcessor:
             
             unique_id = f"P_{transaction_date.strftime('%Y%m%d')}_{abs(hash(str(row['Transaction Description'])))}"
             
+            # Adjust the amount based on transaction type (debit = negative, credit = positive)
+            amount = float(str(row['Transaction Amount']).replace(',',''))
+            if row['Transaction Type'].lower() == 'debit':
+                amount = -abs(amount)
+            elif row['Transaction Type'].lower() == 'credit':
+                amount = abs(amount)
+
             processed_data = {
                 'transaction_id': unique_id,
                 'posting_date': formatted_date,
