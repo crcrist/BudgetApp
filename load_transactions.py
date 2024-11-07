@@ -20,6 +20,8 @@ load_dotenv()
 db_path = os.path.expanduser(os.getenv("DB_PATH"))
 my_csv_folder = os.path.expanduser(os.getenv("MY_PATH"))
 partner_csv_folder = os.path.expanduser(os.getenv("BBY_PATH"))
+card_csv_folder = os.path.expanduser(os.getenv("CARD_PATH"))
+
 
 # Database connection
 try:
@@ -72,6 +74,7 @@ processor = TransactionProcessor(conn, category_mappings)
 # Add debug logging for paths
 logging.info(f"My CSV folder path: {my_csv_folder}")
 logging.info(f"Partner CSV folder path: {partner_csv_folder}")
+logging.info(f"Card CSV folder path: {card_csv_folder}")
 
 # Verify folders exist
 if not os.path.exists(my_csv_folder):
@@ -79,6 +82,9 @@ if not os.path.exists(my_csv_folder):
     exit()
 if not os.path.exists(partner_csv_folder):
     logging.error(f"Partner CSV folder not found: {partner_csv_folder}")
+    exit()
+if not os.path.exists(card_csv_folder):
+    logging.error(f"Card CSV folder not found: {card_csv_folder}")
     exit()
 
 # Process my transactions
@@ -97,6 +103,13 @@ for filename in partner_files:
         file_path = os.path.join(partner_csv_folder, filename)
         processor.process_csv(file_path, 'partner')
 
+card_files = os.listdir(card_csv_folder)
+logging.info(f"Found card files: {card_files}")
+for filename in card_files:
+    if filename.endswith('.csv'):
+        file_path = os.path.join(card_csv_folder, filename)
+        processor.process_csv(file_path, 'card')
+
 # Verify results
 cursor.execute("SELECT COUNT(*) FROM transactions WHERE account_owner = 'Partner'")
 partner_count = cursor.fetchone()[0]
@@ -105,6 +118,10 @@ logging.info(f"Total partner transactions in database: {partner_count}")
 cursor.execute("SELECT COUNT(*) FROM transactions WHERE account_owner = 'Connor'")
 my_count = cursor.fetchone()[0]
 logging.info(f"Total my transactions in database: {my_count}")
+
+cursor.execute("SELECT COUNT(*) FROM transactions WHERE account_owner = 'Card'")
+card_count = cursor.fetchone()[0]
+logging.info(f"Total card transactions in databse: {card_count}")
 
 # Close the connection
 try:

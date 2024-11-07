@@ -25,3 +25,6 @@ __pycache__/
 *$py.class
 .env/
 venv/
+
+# transaction folders
+BudgetApp/transactions/**
